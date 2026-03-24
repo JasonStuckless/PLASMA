@@ -10,3 +10,4 @@ seaborn
 matplotlib
 soundfile
 tqdm
+phonemizer

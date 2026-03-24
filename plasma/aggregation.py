@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import pandas as pd
 
 
@@ -24,4 +22,4 @@ def aggregate_pvp(pvp_df: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["chunk_duration_ms", "class"])
         .reset_index(drop=True)
     )
-    return aggs
+    return agg

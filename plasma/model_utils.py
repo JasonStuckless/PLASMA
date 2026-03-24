@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Dict, Any
+import os
 
 import torch
+from phonemizer.backend.espeak.wrapper import EspeakWrapper
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
 
@@ -20,14 +22,24 @@ def load_model(model_name: str, use_gpu_if_available: bool = True) -> ModelBundl
     else:
         device = torch.device("cpu")
 
+    espeak_dll = r"C:\Program Files\eSpeak NG\libespeak-ng.dll"
+
+    if not os.path.exists(espeak_dll):
+        raise FileNotFoundError(
+            f"Could not find eSpeak NG DLL at: {espeak_dll}\n"
+            "Install eSpeak NG or update this path in plasma/model_utils.py"
+        )
+
+    EspeakWrapper.set_library(espeak_dll)
+
     processor = Wav2Vec2Processor.from_pretrained(model_name)
     model = Wav2Vec2ForCTC.from_pretrained(model_name).to(device)
     model.eval()
 
-    id_to_token = processor.tokenizer.convert_ids_to_tokens(
+    id_to_token_list = processor.tokenizer.convert_ids_to_tokens(
         list(range(model.config.vocab_size))
     )
-    id_to_token = {i: tok for i, tok in enumerate(id_to_token)}
+    id_to_token = {i: tok for i, tok in enumerate(id_to_token_list)}
 
     blank_token_id = processor.tokenizer.pad_token_id
     if blank_token_id is None:
@@ -56,6 +68,7 @@ def infer_logits(bundle: ModelBundle, waveform: torch.Tensor, sample_rate: int) 
         logits = bundle.model(input_values).logits[0]
 
     pred_ids = torch.argmax(logits, dim=-1).cpu()
+
     return {
         "logits": logits.detach().cpu(),
         "pred_ids": pred_ids,

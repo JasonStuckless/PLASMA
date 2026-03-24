@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, Tuple
 
+import soundfile as sf
 import torch
 import torchaudio
 
@@ -11,7 +12,8 @@ def load_audio(
     mono: bool = True,
     normalize_audio: bool = True,
 ) -> torch.Tensor:
-    waveform, sample_rate = torchaudio.load(str(file_path))
+    waveform, sample_rate = sf.read(str(file_path), always_2d=True)
+    waveform = torch.tensor(waveform, dtype=torch.float32).transpose(0, 1)
 
     if mono and waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
@@ -33,7 +35,15 @@ def chunk_waveform_strict(
     waveform: torch.Tensor,
     sample_rate: int,
     chunk_duration_ms: int,
+    min_chunk_samples: int = 400,
 ) -> List[Tuple[torch.Tensor, float]]:
+    """
+    Split waveform into strict isolated chunks.
+
+    Any final remainder chunk shorter than min_chunk_samples is skipped,
+    because extremely short inputs can fail in the Wav2Vec2 convolutional
+    front end.
+    """
     chunk_size = int(sample_rate * (chunk_duration_ms / 1000.0))
     chunks: List[Tuple[torch.Tensor, float]] = []
 
@@ -43,6 +53,10 @@ def chunk_waveform_strict(
     while start < total_samples:
         end = min(start + chunk_size, total_samples)
         chunk = waveform[start:end].clone()
+
+        if chunk.shape[0] < min_chunk_samples:
+            break
+
         start_time_sec = start / sample_rate
         chunks.append((chunk, start_time_sec))
         start = end
