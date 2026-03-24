@@ -52,6 +52,7 @@ Each chunk is processed independently with no access to past or future audio.
 
 ## Repository Structure
 
+```text
 plasma-experiments/
 ├── configs/
 │   └── config.yaml
