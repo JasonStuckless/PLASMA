@@ -1,0 +1,31 @@
+paths:
+  data_raw: data/raw
+  output_root: outputs
+  csv_dir: ${paths.output_root}/csv
+  plot_dir: ${paths.output_root}/plots
+  mlruns_dir: ${paths.output_root}/mlruns
+  log_dir: ${paths.output_root}/logs
+
+model:
+  name: facebook/wav2vec2-xlsr-53-espeak-cv-ft
+  sample_rate: 16000
+  use_gpu_if_available: true
+
+experiment:
+  chunk_durations_ms: [100, 150, 200, 250, 300]
+  normalize_audio: true
+  mono: true
+  min_tci_epsilon: 1.0e-8
+
+metrics:
+  pli_alpha: 0.7
+  pli_beta: 0.3
+
+mlflow:
+  tracking_uri: file:outputs/mlruns
+  experiment_name: PLASMA
+
+hydra:
+  run:
+    dir: .
+  output_subdir: .hydra
