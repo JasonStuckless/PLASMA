@@ -215,19 +215,3 @@ Used for visualization of metric trends and class-level behavior.
 - Silence class should be excluded from analysis.
 
 ---
-
-## Purpose
-
-This repository is designed for:
-
-- analyzing bounded-context degradation
-- quantifying phoneme-level effects
-- supporting reproducible experimental research
-
-It is not intended as an optimized speech recognition system.
-
----
-
-## License
-
-Add license here if needed.
