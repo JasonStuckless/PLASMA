@@ -1,0 +1,4 @@
+dataset,speaker,recording,audio_path
+librispeech_test_clean,2300,2300/131720/2300-131720-0013.flac,data\LibriSpeech\test-clean\2300\131720\2300-131720-0013.flac
+librispeech_test_clean,1221,1221/135766/1221-135766-0009.flac,data\LibriSpeech\test-clean\1221\135766\1221-135766-0009.flac
+librispeech_test_clean,237,237/134500/237-134500-0033.flac,data\LibriSpeech\test-clean\237\134500\237-134500-0033.flac

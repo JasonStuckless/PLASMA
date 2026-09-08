@@ -163,6 +163,7 @@ def main(cfg: DictConfig) -> None:
                 model_type=str(model_cfg.type),
                 revision=None if revision is None else str(revision),
                 use_gpu_if_available=bool(cfg.experiment.use_gpu_if_available),
+                espeak_library=str(cfg.experiment.espeak_library) if cfg.experiment.get("espeak_library") else None,
             )
 
             for dataset_key, audio_files in dataset_files.items():

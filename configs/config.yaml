@@ -31,6 +31,7 @@ models:
 
 experiment:
   sample_rate: 16000
+  espeak_library: "C:\\Program Files\\eSpeak NG\\libespeak-ng.dll"
   chunk_durations_ms: [100, 150, 200, 250, 300, 350, 400]
   normalize_audio: true
   mono: true
