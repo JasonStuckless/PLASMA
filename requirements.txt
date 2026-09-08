@@ -1,6 +1,8 @@
 torch
 torchaudio
 transformers
+huggingface_hub
+safetensors
 hydra-core
 omegaconf
 mlflow
@@ -11,3 +13,5 @@ matplotlib
 soundfile
 tqdm
 phonemizer
+pyyaml
+typeguard

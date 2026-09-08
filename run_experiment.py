@@ -82,8 +82,9 @@ def main(cfg: DictConfig):
                 "chunk_durations_ms": str(cfg.experiment.chunk_durations_ms),
                 "normalize_audio": cfg.experiment.normalize_audio,
                 "mono": cfg.experiment.mono,
-                "pli_alpha": cfg.metrics.pli_alpha,
-                "pli_beta": cfg.metrics.pli_beta,
+                "bootstrap_iterations": cfg.statistics.bootstrap_iterations,
+                "confidence_level": cfg.statistics.confidence_level,
+                "bootstrap_seed": cfg.statistics.bootstrap_seed,
                 "use_gpu_if_available": cfg.model.use_gpu_if_available,
             }
         )
@@ -117,9 +118,6 @@ def main(cfg: DictConfig):
                     alignment=alignment,
                     baseline_intervals=baseline_intervals,
                     stream_intervals=stream_intervals,
-                    pli_alpha=cfg.metrics.pli_alpha,
-                    pli_beta=cfg.metrics.pli_beta,
-                    min_tci_epsilon=cfg.experiment.min_tci_epsilon,
                 )
 
                 rec_metrics["recording"] = wav_path.name
@@ -138,8 +136,18 @@ def main(cfg: DictConfig):
         per_recording_df = pd.DataFrame(per_recording_rows)
         pvp_df = pd.concat(per_recording_pvp_rows, ignore_index=True)
 
-        aggregate_df = aggregate_recording_metrics(per_recording_df)
-        aggregate_pvp_df = aggregate_pvp(pvp_df)
+        aggregate_df = aggregate_recording_metrics(
+            per_recording_df=per_recording_df,
+            bootstrap_iterations=cfg.statistics.bootstrap_iterations,
+            confidence_level=cfg.statistics.confidence_level,
+            bootstrap_seed=cfg.statistics.bootstrap_seed,
+        )
+        aggregate_pvp_df = aggregate_pvp(
+            pvp_df=pvp_df,
+            bootstrap_iterations=cfg.statistics.bootstrap_iterations,
+            confidence_level=cfg.statistics.confidence_level,
+            bootstrap_seed=cfg.statistics.bootstrap_seed,
+        )
 
         per_recording_csv = Path(csv_dir) / "per_recording_metrics.csv"
         aggregate_csv = Path(csv_dir) / "aggregate_metrics.csv"
@@ -153,7 +161,7 @@ def main(cfg: DictConfig):
         mlflow.log_artifact(str(aggregate_csv))
         mlflow.log_artifact(str(pvp_csv))
 
-        for metric in ["pcr", "por", "tci", "pli"]:
+        for metric in ["por", "tci", "tei", "atdi", "pli"]:
             plot_path = save_metric_curve(aggregate_df, metric, plot_dir)
             mlflow.log_artifact(str(plot_path))
 
@@ -161,13 +169,26 @@ def main(cfg: DictConfig):
         for plot_file in Path(plot_dir).glob("*.png"):
             mlflow.log_artifact(str(plot_file))
 
-        # Log aggregate means as top-level MLflow metrics
+        # Log aggregate means, standard deviations, and confidence intervals.
         for _, row in aggregate_df.iterrows():
             chunk = int(row["chunk_duration_ms"])
-            mlflow.log_metric(f"pcr_{chunk}ms", float(row["pcr"]))
-            mlflow.log_metric(f"por_{chunk}ms", float(row["por"]))
-            mlflow.log_metric(f"tci_{chunk}ms", float(row["tci"]))
-            mlflow.log_metric(f"pli_{chunk}ms", float(row["pli"]))
+            for metric in ["por", "tci", "tei", "atdi", "pli"]:
+                mlflow.log_metric(
+                    f"{metric}_{chunk}ms",
+                    float(row[metric]),
+                )
+                mlflow.log_metric(
+                    f"{metric}_std_{chunk}ms",
+                    float(row[f"{metric}_std"]),
+                )
+                mlflow.log_metric(
+                    f"{metric}_ci_lower_{chunk}ms",
+                    float(row[f"{metric}_ci_lower"]),
+                )
+                mlflow.log_metric(
+                    f"{metric}_ci_upper_{chunk}ms",
+                    float(row[f"{metric}_ci_upper"]),
+                )
 
         print(f"Saved CSV files to: {Path(csv_dir).resolve()}")
         print(f"Saved plot files to: {Path(plot_dir).resolve()}")

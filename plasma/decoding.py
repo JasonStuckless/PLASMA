@@ -16,14 +16,39 @@ def clean_token(token: str) -> str:
 
     token = token.strip()
 
-    # Hugging Face CTC tokenizers often use these markers
-    token = token.replace("|", " ")
-    token = token.replace("<s>", "")
-    token = token.replace("</s>", "")
-    token = token.replace("<pad>", "")
-    token = token.replace("<unk>", "")
+    special_tokens = {
+        "",
+        "|",
+        "<s>",
+        "</s>",
+        "<pad>",
+        "<unk>",
+        "<blank>",
+        "<sos>",
+        "<eos>",
+        "[PAD]",
+        "[UNK]",
+    }
 
-    return token.strip()
+    if token in special_tokens:
+        return ""
+
+    normalization_map = {
+        "ɡ": "g",
+        "ɹ": "r",
+        "aj": "aɪ",
+        "aw": "aʊ",
+        "ej": "eɪ",
+        "ow": "oʊ",
+        "oj": "ɔɪ",
+        "t͡ʃ": "tʃ",
+        "d͡ʒ": "dʒ",
+    }
+
+    return normalization_map.get(
+        token,
+        token,
+    )
 
 
 def frame_ids_to_intervals(

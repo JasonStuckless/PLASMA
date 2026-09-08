@@ -40,9 +40,8 @@ def chunk_waveform_strict(
     """
     Split waveform into strict isolated chunks.
 
-    Any final remainder chunk shorter than min_chunk_samples is skipped,
-    because extremely short inputs can fail in the Wav2Vec2 convolutional
-    front end.
+    Any final remainder chunk shorter than min_chunk_samples is skipped
+    to avoid unstable or invalid model inputs for extremely short segments.
     """
     chunk_size = int(sample_rate * (chunk_duration_ms / 1000.0))
     chunks: List[Tuple[torch.Tensor, float]] = []

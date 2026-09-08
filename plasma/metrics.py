@@ -1,4 +1,3 @@
-import math
 from typing import Dict, List, Any
 
 import pandas as pd
@@ -12,9 +11,6 @@ def compute_recording_metrics(
     alignment: List[AlignmentPair],
     baseline_intervals: List[PhonemeInterval],
     stream_intervals: List[PhonemeInterval],
-    pli_alpha: float,
-    pli_beta: float,
-    min_tci_epsilon: float,
 ) -> Dict[str, float]:
     baseline_count = len(baseline_intervals)
     matched_pairs = [p for p in alignment if p.op == "match"]
@@ -24,28 +20,55 @@ def compute_recording_metrics(
     no = len(omitted_pairs)
     nb = baseline_count
 
-    pcr = nm / nb if nb > 0 else 0.0
     por = no / nb if nb > 0 else 0.0
 
-    tci_values: List[float] = []
+    duration_ratios: List[float] = []
+    pli_distortions: List[float] = []
+
     for pair in matched_pairs:
         b = baseline_intervals[pair.baseline_idx]
         s = stream_intervals[pair.stream_idx]
 
         if b.duration_sec > 0:
-            tci_values.append(s.duration_sec / b.duration_sec)
+            duration_ratios.append(s.duration_sec / b.duration_sec)
 
-    tci = sum(tci_values) / len(tci_values) if tci_values else 0.0
-    safe_tci = max(tci, min_tci_epsilon)
-    pli = (pli_alpha * por) + (pli_beta * abs(math.log(safe_tci)))
+        max_duration = max(b.duration_sec, s.duration_sec)
+        if max_duration > 0:
+            pli_distortions.append(
+                abs(s.duration_sec - b.duration_sec) / max_duration
+            )
+        else:
+            pli_distortions.append(0.0)
+
+    # Directional temporal metrics. Each metric is normalized over all
+    # matched phonemes, so it captures both prevalence and magnitude.
+    if duration_ratios:
+        tci = sum(max(0.0, 1.0 - ratio) for ratio in duration_ratios) / len(duration_ratios)
+        tei = sum(max(0.0, ratio - 1.0) for ratio in duration_ratios) / len(duration_ratios)
+        atdi = sum(abs(ratio - 1.0) for ratio in duration_ratios) / len(duration_ratios)
+    else:
+        tci = 0.0
+        tei = 0.0
+        atdi = 0.0
+
+    # Weight-free normalized Phoneme Loss Index.
+    # Each omitted baseline phoneme contributes 1.0.
+    # Each matched phoneme contributes its bounded duration distortion:
+    # |d_s - d_b| / max(d_s, d_b).
+    pli = (
+        (no + sum(pli_distortions)) / nb
+        if nb > 0
+        else 0.0
+    )
 
     return {
         "baseline_count": nb,
         "matched_count": nm,
         "omitted_count": no,
-        "pcr": pcr,
         "por": por,
         "tci": tci,
+        "tei": tei,
+        "atdi": atdi,
         "pli": pli,
     }
 
@@ -76,7 +99,7 @@ def compute_pvp(
             b = baseline_intervals[pair.baseline_idx]
             s = stream_intervals[pair.stream_idx]
             phoneme_class = converter.phoneme_class(b.label)
-            tci_value = s.duration_sec / b.duration_sec if b.duration_sec > 0 else None
+            duration_ratio = s.duration_sec / b.duration_sec if b.duration_sec > 0 else None
 
             rows.append(
                 {
@@ -87,16 +110,22 @@ def compute_pvp(
                     "stream_idx": pair.stream_idx,
                 }
             )
-            if tci_value is not None:
-                rows.append(
-                    {
-                        "class": phoneme_class,
-                        "role": "tci",
-                        "value": float(tci_value),
-                        "baseline_idx": pair.baseline_idx,
-                        "stream_idx": pair.stream_idx,
-                    }
-                )
+            if duration_ratio is not None:
+                temporal_values = {
+                    "tci": max(0.0, 1.0 - duration_ratio),
+                    "tei": max(0.0, duration_ratio - 1.0),
+                    "atdi": abs(duration_ratio - 1.0),
+                }
+                for role, value in temporal_values.items():
+                    rows.append(
+                        {
+                            "class": phoneme_class,
+                            "role": role,
+                            "value": float(value),
+                            "baseline_idx": pair.baseline_idx,
+                            "stream_idx": pair.stream_idx,
+                        }
+                    )
         elif pair.op == "delete":
             b = baseline_intervals[pair.baseline_idx]
             rows.append(
@@ -118,9 +147,13 @@ def compute_pvp(
         omitted_total = float((class_df["role"] == "omitted").sum())
 
         class_tci_values = class_df.loc[class_df["role"] == "tci", "value"].tolist()
-        avg_tci = sum(class_tci_values) / len(class_tci_values) if class_tci_values else 0.0
+        class_tei_values = class_df.loc[class_df["role"] == "tei", "value"].tolist()
+        class_atdi_values = class_df.loc[class_df["role"] == "atdi", "value"].tolist()
 
-        pcr = matched_total / baseline_total if baseline_total > 0 else 0.0
+        avg_tci = sum(class_tci_values) / len(class_tci_values) if class_tci_values else 0.0
+        avg_tei = sum(class_tei_values) / len(class_tei_values) if class_tei_values else 0.0
+        avg_atdi = sum(class_atdi_values) / len(class_atdi_values) if class_atdi_values else 0.0
+
         por = omitted_total / baseline_total if baseline_total > 0 else 0.0
 
         summary_rows.append(
@@ -129,9 +162,10 @@ def compute_pvp(
                 "baseline_total": baseline_total,
                 "matched_total": matched_total,
                 "omitted_total": omitted_total,
-                "pcr": pcr,
                 "por": por,
                 "tci": avg_tci,
+                "tei": avg_tei,
+                "atdi": avg_atdi,
             }
         )
 
