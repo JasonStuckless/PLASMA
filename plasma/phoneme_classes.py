@@ -1,215 +1,68 @@
+from __future__ import annotations
+
 from typing import Dict
+
+from plasma.decoding import normalize_phoneme_token
+
+
+PVP_CLASSES = (
+    "stops",
+    "fricatives",
+    "affricates",
+    "nasals",
+    "liquids_glides",
+    "front_vowels",
+    "back_central_vowels",
+    "diphthongs",
+)
 
 
 class IPAToARPAbetConverter:
     """
-    Convert supported IPA variants to the canonical
-    ARPAbet inventory used for PLASMA class grouping.
+    Compatibility wrapper for PLASMA phoneme-class grouping.
 
-    Unsupported phones are classified as OTHER rather
-    than SIL so that unfamiliar model outputs are not
-    incorrectly treated as silence.
+    Class assignment follows the phoneme inventory defined in the paper rather
+    than ARPAbet vowel-category conventions. Unsupported symbols are assigned
+    to ``other`` and remain available to sequence-level metrics.
     """
 
     def __init__(self):
-        self.ipa_to_arpabet: Dict[str, str] = {
-            # Front vowels
-            "i": "IY",
-            "iː": "IY",
-            "ɪ": "IH",
-            "e": "EY",
-            "eː": "EY",
-            "ej": "EY",
-            "eɪ": "EY",
-            "ɛ": "EH",
-            "ɛː": "EH",
-            "æ": "AE",
-            "æː": "AE",
-            "a": "AE",
+        self.class_map: Dict[str, str] = {}
 
-            # Central vowels
-            "ə": "AH",
-            "əː": "AH",
-            "ɘ": "AH",
-            "ʌ": "AH",
-            "ʌː": "AH",
-            "ɜ": "ER",
-            "ɜː": "ER",
-            "ɝ": "ER",
-            "ɚ": "ER",
-
-            # Back vowels
-            "u": "UW",
-            "uː": "UW",
-            "ʊ": "UH",
-            "o": "OW",
-            "oː": "OW",
-            "ow": "OW",
-            "oʊ": "OW",
-            "ɔ": "AO",
-            "ɔː": "AO",
-            "ɑ": "AA",
-            "ɑː": "AA",
-            "ɒ": "AA",
-
-            # Diphthongs
-            "aɪ": "AY",
-            "aj": "AY",
-            "aʊ": "AW",
-            "aw": "AW",
-            "ɔɪ": "OY",
-            "oj": "OY",
-
-            # Stops
-            "p": "P",
-            "b": "B",
-            "t": "T",
-            "d": "D",
-            "k": "K",
-            "g": "G",
-            "ɡ": "G",
-
-            # Fricatives
-            "f": "F",
-            "v": "V",
-            "θ": "TH",
-            "ð": "DH",
-            "s": "S",
-            "z": "Z",
-            "ʃ": "SH",
-            "ʒ": "ZH",
-            "h": "HH",
-
-            # Affricates
-            "tʃ": "CH",
-            "t͡ʃ": "CH",
-            "ʧ": "CH",
-            "dʒ": "JH",
-            "d͡ʒ": "JH",
-            "ʤ": "JH",
-
-            # Nasals
-            "m": "M",
-            "n": "N",
-            "ŋ": "NG",
-
-            # Liquids and glides
-            "l": "L",
-            "r": "R",
-            "ɹ": "R",
-            "ɾ": "R",
-            "w": "W",
-            "j": "Y",
-
-            # Explicit silence
-            "SIL": "SIL",
-            "SP": "SIL",
-            "sil": "SIL",
-        }
-
-        self.arpabet_inventory = {
-            "P", "B", "T", "D", "K", "G",
-            "F", "V", "TH", "DH", "S", "Z",
-            "SH", "ZH", "HH",
-            "CH", "JH",
-            "M", "N", "NG",
-            "L", "R", "W", "Y",
-            "IY", "IH", "EY", "EH", "AE",
-            "AA", "AO", "OW", "UH", "UW",
-            "AH", "ER",
-            "AY", "AW", "OY",
-            "SIL",
-        }
-
-        self.class_map = {
-            "P": "stops",
-            "B": "stops",
-            "T": "stops",
-            "D": "stops",
-            "K": "stops",
-            "G": "stops",
-
-            "F": "fricatives",
-            "V": "fricatives",
-            "TH": "fricatives",
-            "DH": "fricatives",
-            "S": "fricatives",
-            "Z": "fricatives",
-            "SH": "fricatives",
-            "ZH": "fricatives",
-            "HH": "fricatives",
-
-            "CH": "affricates",
-            "JH": "affricates",
-
-            "M": "nasals",
-            "N": "nasals",
-            "NG": "nasals",
-
-            "L": "liquids_glides",
-            "R": "liquids_glides",
-            "W": "liquids_glides",
-            "Y": "liquids_glides",
-
-            "IY": "front_vowels",
-            "IH": "front_vowels",
-            "EY": "front_vowels",
-            "EH": "front_vowels",
-            "AE": "front_vowels",
-
-            "AA": "back_central_vowels",
-            "AO": "back_central_vowels",
-            "OW": "back_central_vowels",
-            "UH": "back_central_vowels",
-            "UW": "back_central_vowels",
-            "AH": "back_central_vowels",
-            "ER": "back_central_vowels",
-
-            "AY": "diphthongs",
-            "AW": "diphthongs",
-            "OY": "diphthongs",
-
-            "SIL": "silence",
-        }
-
-    def convert(self, symbol: str) -> str:
-        if symbol is None:
-            return "OTHER"
-
-        s = symbol.strip()
-
-        if not s:
-            return "OTHER"
-
-        if s in self.ipa_to_arpabet:
-            return self.ipa_to_arpabet[s]
-
-        s_no_marks = (
-            s.replace("ˈ", "")
-            .replace("ˌ", "")
-            .replace("ː", "")
-            .replace(".", "")
+        self._add("stops", "p", "b", "t", "d", "k", "g", "ɡ")
+        self._add("fricatives", "f", "v", "s", "z", "ʃ", "ʒ", "θ", "ð", "h")
+        self._add("affricates", "tʃ", "t͡ʃ", "ʧ", "dʒ", "d͡ʒ", "ʤ")
+        self._add("nasals", "m", "n", "ŋ")
+        self._add("liquids_glides", "l", "r", "ɹ", "w", "j")
+        self._add("front_vowels", "i", "iː", "ɪ", "e", "eː", "ɛ", "ɛː", "æ", "æː")
+        self._add(
+            "back_central_vowels",
+            "u", "uː", "ʊ", "o", "oː", "ɔ", "ɔː", "ʌ", "ʌː", "ə", "əː", "ɑ", "ɑː",
         )
+        self._add("diphthongs", "aɪ", "aʊ", "eɪ", "oʊ", "ɔɪ", "aj", "aw", "ej", "ow", "oj")
 
-        if s_no_marks in self.ipa_to_arpabet:
-            return self.ipa_to_arpabet[
-                s_no_marks
-            ]
+        self.silence_symbols = {"SIL", "SP", "sil"}
 
-        upper = s.upper()
+    def _add(self, phoneme_class: str, *symbols: str) -> None:
+        for symbol in symbols:
+            canonical = normalize_phoneme_token(symbol)
+            self.class_map[canonical] = phoneme_class
 
-        if upper in self.arpabet_inventory:
-            return upper
-
+    def convert(self, symbol: str | None) -> str:
+        """Return a canonical symbol or OTHER for unsupported inputs."""
+        canonical = normalize_phoneme_token(symbol)
+        if not canonical:
+            return "OTHER"
+        if canonical in self.silence_symbols:
+            return "SIL"
+        if canonical in self.class_map:
+            return canonical
         return "OTHER"
 
-    def phoneme_class(self, symbol: str) -> str:
-        arpabet = self.convert(symbol)
-
-        if arpabet == "OTHER":
+    def phoneme_class(self, symbol: str | None) -> str:
+        canonical = self.convert(symbol)
+        if canonical == "SIL":
+            return "silence"
+        if canonical == "OTHER":
             return "other"
-
-        return self.class_map.get(
-            arpabet,
-            "other",
-        )
+        return self.class_map[canonical]

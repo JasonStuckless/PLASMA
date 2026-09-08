@@ -1,25 +1,49 @@
 paths:
-  data_raw: data/raw
   output_root: outputs
   csv_dir: ${paths.output_root}/csv
   plot_dir: ${paths.output_root}/plots
   mlruns_dir: ${paths.output_root}/mlruns
   log_dir: ${paths.output_root}/logs
 
-model:
-  name: facebook/wav2vec2-xlsr-53-espeak-cv-ft
-  sample_rate: 16000
-  use_gpu_if_available: true
+datasets:
+  controlled:
+    path: data/raw
+    recursive: false
+    extensions: [".wav", ".flac"]
+  librispeech_test_clean:
+    path: data/LibriSpeech/test-clean
+    recursive: true
+    extensions: [".flac", ".wav"]
+
+models:
+  wav2vec2_xlsr_espeak:
+    name: facebook/wav2vec2-xlsr-53-espeak-cv-ft
+    type: wav2vec2_ctc
+    revision: null
+  hubert_english_ipa:
+    name: speech31/hubert-base-english-ipa
+    type: hubert_ctc
+    revision: null
+  phoneticxeus:
+    name: changelinglab/PhoneticXeus
+    type: phoneticxeus
+    revision: 8d83dee94817a07dc150f87d08f7e0ee01bdb66d
 
 experiment:
+  sample_rate: 16000
   chunk_durations_ms: [100, 150, 200, 250, 300, 350, 400]
   normalize_audio: true
   mono: true
+  use_gpu_if_available: true
+  min_model_input_samples: 400
+  pad_short_final_chunk: true
+  clear_generated_outputs: true
 
 statistics:
   bootstrap_iterations: 10000
   confidence_level: 0.95
   bootstrap_seed: 42
+  bootstrap_batch_size: 256
 
 mlflow:
   tracking_uri: file:outputs/mlruns

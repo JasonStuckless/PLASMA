@@ -8,10 +8,8 @@ omegaconf
 mlflow
 pandas
 numpy
-seaborn
 matplotlib
 soundfile
 tqdm
-phonemizer
 pyyaml
 typeguard

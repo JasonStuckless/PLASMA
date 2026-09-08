@@ -20,3 +20,7 @@ outputs/plots/
 
 .DS_Store
 Thumbs.db
+
+# Local datasets and archived generated outputs
+data/
+outputs.zip

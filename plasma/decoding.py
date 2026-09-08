@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import Dict, List
+import unicodedata
 
 
 @dataclass
@@ -10,45 +13,65 @@ class PhonemeInterval:
     duration_sec: float
 
 
-def clean_token(token: str) -> str:
+SPECIAL_TOKENS = {
+    "",
+    "|",
+    "<s>",
+    "</s>",
+    "<pad>",
+    "<unk>",
+    "<blank>",
+    "<sos>",
+    "<eos>",
+    "[PAD]",
+    "[UNK]",
+}
+
+# Only unambiguous symbol-equivalence mappings are applied before alignment.
+PHONEME_NORMALIZATION_MAP = {
+    "ɡ": "g",
+    "ɹ": "r",
+    "aj": "aɪ",
+    "aw": "aʊ",
+    "ej": "eɪ",
+    "ow": "oʊ",
+    "oj": "ɔɪ",
+    "t͡ʃ": "tʃ",
+    "d͡ʒ": "dʒ",
+    "ʧ": "tʃ",
+    "ʤ": "dʒ",
+}
+
+
+def normalize_phoneme_token(token: str | None) -> str:
     if token is None:
         return ""
 
-    token = token.strip()
-
-    special_tokens = {
-        "",
-        "|",
-        "<s>",
-        "</s>",
-        "<pad>",
-        "<unk>",
-        "<blank>",
-        "<sos>",
-        "<eos>",
-        "[PAD]",
-        "[UNK]",
-    }
-
-    if token in special_tokens:
+    token = unicodedata.normalize("NFC", token.strip())
+    if token in SPECIAL_TOKENS:
         return ""
 
-    normalization_map = {
-        "ɡ": "g",
-        "ɹ": "r",
-        "aj": "aɪ",
-        "aw": "aʊ",
-        "ej": "eɪ",
-        "ow": "oʊ",
-        "oj": "ɔɪ",
-        "t͡ʃ": "tʃ",
-        "d͡ʒ": "dʒ",
-    }
+    return PHONEME_NORMALIZATION_MAP.get(token, token)
 
-    return normalization_map.get(
-        token,
-        token,
-    )
+
+def trim_pred_ids_to_valid_audio(
+    pred_ids,
+    valid_num_samples: int,
+    input_num_samples: int,
+):
+    """Trim frame predictions corresponding only to right-padding samples."""
+    if input_num_samples <= 0:
+        raise ValueError("input_num_samples must be positive.")
+    if not 0 <= valid_num_samples <= input_num_samples:
+        raise ValueError("valid_num_samples must be in [0, input_num_samples].")
+
+    num_frames = len(pred_ids)
+    if num_frames == 0 or valid_num_samples == input_num_samples:
+        return pred_ids
+
+    valid_frame_count = int(round(num_frames * valid_num_samples / input_num_samples))
+    valid_frame_count = max(1, min(num_frames, valid_frame_count))
+    return pred_ids[:valid_frame_count]
 
 
 def frame_ids_to_intervals(
@@ -59,12 +82,14 @@ def frame_ids_to_intervals(
     total_audio_duration_sec: float,
 ) -> List[PhonemeInterval]:
     """
-    Convert raw frame labels to intervals before CTC collapse.
-    Blank frames are ignored. Consecutive identical non-blank labels become
-    one interval. Timing is derived from frame index coverage over the chunk.
+    Convert frame labels to phoneme intervals before sequence alignment.
+
+    Blank frames are ignored. Consecutive identical non-blank labels form one
+    interval. Timing is estimated uniformly from frame coverage over the valid
+    audio duration supplied for this segment.
     """
     num_frames = len(pred_ids)
-    if num_frames == 0:
+    if num_frames == 0 or total_audio_duration_sec <= 0:
         return []
 
     frame_duration = total_audio_duration_sec / num_frames
@@ -73,8 +98,8 @@ def frame_ids_to_intervals(
     current_label = None
     current_start = None
 
-    def flush(end_frame_idx: int):
-        nonlocal current_label, current_start, intervals
+    def flush(end_frame_idx: int) -> None:
+        nonlocal current_label, current_start
         if current_label is None or current_start is None:
             return
 
@@ -103,7 +128,7 @@ def frame_ids_to_intervals(
             continue
 
         raw_token = id_to_token.get(token_id, "")
-        label = clean_token(raw_token)
+        label = normalize_phoneme_token(raw_token)
 
         if not label:
             flush(frame_idx)
@@ -112,9 +137,7 @@ def frame_ids_to_intervals(
         if current_label is None:
             current_label = label
             current_start = frame_idx
-        elif label == current_label:
-            continue
-        else:
+        elif label != current_label:
             flush(frame_idx)
             current_label = label
             current_start = frame_idx
@@ -124,4 +147,4 @@ def frame_ids_to_intervals(
 
 
 def intervals_to_sequence(intervals: List[PhonemeInterval]) -> List[str]:
-    return [x.label for x in intervals]
+    return [interval.label for interval in intervals]
